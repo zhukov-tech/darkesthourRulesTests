@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>STALKER Тренажер</title>
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #121212;
+    color: #f3f3f3;
+}
+
+.app {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 24px 16px 36px;
+}
+
+.card {
+    background: #1e1e1e;
+    border: 1px solid #2d2d2d;
+    border-radius: 14px;
+    padding: 18px;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.25);
+}
+
+h1 {
+    margin: 0 0 10px;
+    font-size: 26px;
+}
+
+.subtitle {
+    margin: 0 0 20px;
+    color: #b7b7b7;
+}
+
+.stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.stat {
+    background: #2a2a2a;
+    border-radius: 10px;
+    padding: 10px;
+    text-align: center;
+}
+
+.stat-title {
+    display: block;
+    color: #aaaaaa;
+    font-size: 12px;
+    margin-bottom: 6px;
+}
+
+.stat-value {
+    font-size: 20px;
+    font-weight: bold;
+}
+
+.question {
+    margin: 0 0 14px;
+    font-size: 24px;
+    line-height: 1.3;
+}
+
+.answers {
+    display: grid;
+    gap: 10px;
+}
+
+.answer-btn {
+    width: 100%;
+    border: 1px solid #3d3d3d;
+    border-radius: 10px;
+    background: #262626;
+    color: #f0f0f0;
+    text-align: left;
+    padding: 12px 14px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.answer-btn:hover {
+    background: #303030;
+}
+
+.answer-btn.selected {
+    border-color: #6fa9ff;
+    background: #1f2e45;
+}
+
+.answer-btn:disabled {
+    cursor: default;
+    opacity: 1;
+}
+
+.answer-btn.answer-correct {
+    border-color: #66bb6a;
+    background: #1f3a24;
+}
+
+.answer-btn.answer-missed {
+    border-color: #fbc02d;
+    background: #3b331a;
+}
+
+.answer-btn.answer-wrong {
+    border-color: #ef5350;
+    background: #3c1f1f;
+}
+
+.controls {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+}
+
+.control-btn {
+    border: none;
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 15px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.control-btn.primary {
+    background: #2e7d32;
+    color: #ffffff;
+}
+
+.control-btn.secondary {
+    background: #3949ab;
+    color: #ffffff;
+}
+
+.control-btn.ghost {
+    background: #2f2f2f;
+    color: #d5d5d5;
+}
+
+.control-btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.result {
+    margin-top: 14px;
+    min-height: 24px;
+    font-size: 17px;
+}
+
+.result.ok {
+    color: #81c784;
+}
+
+.result.bad {
+    color: #ef9a9a;
+}
+
+.hint {
+    margin-top: 8px;
+    color: #bdbdbd;
+    font-size: 14px;
+}
+
+.exam-state {
+    margin-top: 8px;
+    color: #b0bec5;
+}
+
+@media (max-width: 700px) {
+    .question {
+        font-size: 20px;
+    }
+}
+</style>
+</head>
+<body>
+<div class="app">
+    <div class="card">
+        <h1>STALKER: Тест-тренажер</h1>
+        <p class="subtitle">Отметь все правильные варианты и нажми "Проверить ответ".</p>
+
+        <div class="stats">
+            <div class="stat">
+                <span class="stat-title">Вопрос</span>
+                <span class="stat-value" id="qStat">0 / 10</span>
+            </div>
+            <div class="stat">
+                <span class="stat-title">Ошибки</span>
+                <span class="stat-value" id="errStat">0 / 2</span>
+            </div>
+            <div class="stat">
+                <span class="stat-title">Осталось жизней</span>
+                <span class="stat-value" id="lifeStat">2</span>
+            </div>
+        </div>
+
+        <h2 class="question" id="question">Загрузка...</h2>
+        <div class="answers" id="answers"></div>
+
+        <div class="controls">
+            <button class="control-btn primary" id="checkBtn">Проверить ответ</button>
+            <button class="control-btn secondary" id="nextBtn" disabled>Следующий вопрос</button>
+            <button class="control-btn ghost" id="restartBtn">Начать заново</button>
+        </div>
+
+        <p class="result" id="result"></p>
+        <p class="hint" id="hint"></p>
+        <p class="exam-state" id="examState"></p>
+    </div>
+</div>
+
+<script>
+// ====== БАЗА ======
+const db = {
+    "Зомби": {
+        direct: ["Холодное — 2 в корпус", "Гаусс — 1 в корпус", "Пиротехника — 1 взрыв", "Удар экзы — 1 в корпус"],
+        stun: ["Огнестрел — 2 в корпус", "Дробовик — 2 в корпус"],
+        finisher: ["Дробовик — 2 в стане"],
+        slow: []
+    },
+    "Контролёр": {
+        direct: ["Холодное — 2 в корпус", "Гаусс — 1 в корпус", "Пиротехника — 1 взрыв", "Удар экзы — 1 в корпус"],
+        stun: ["Огнестрел — 2 в корпус", "Дробовик — 2 в корпус"],
+        finisher: ["Дробовик — 2 в стане"],
+        slow: []
+    },
+    "Псевдособака": {
+        direct: ["Холодное — 2 в корпус", "Гаусс — 2 в корпус", "Удар экзы — 1 в корпус"],
+        stun: ["Огнестрел — 2 в корпус", "Дробовик — 2 в спину", "Пиротехника — 1 взрыв"],
+        finisher: ["Дробовик — 2 в стане", "Пиротехника — 1 в стане"],
+        slow: []
+    },
+    "Снорк": {
+        direct: ["Холодное — 2 в спину", "Гаусс — 2 в корпус", "Удар экзы — 1 в корпус"],
+        stun: ["Огнестрел — 2 в спину", "Дробовик — 2 в спину", "Пиротехника — 1 взрыв"],
+        finisher: ["Дробовик — 2 в стане", "Пиротехника — 1 в стане"],
+        slow: []
+    },
+    "Бюрер": {
+        direct: ["Холодное — 2 в корпус", "Дробовик — 2 в спину", "Гаусс — 2 в корпус", "Удар экзы — 1 в корпус"],
+        stun: ["Огнестрел — 2 в спину"],
+        finisher: [],
+        slow: [],
+        ignore: ["Пиротехника"]
+    },
+    "Излом": {
+        direct: ["Холодное — 4 в корпус", "Гаусс — 3 в корпус", "Удар экзы — 2 в корпус"],
+        stun: ["Огнестрел — 2 в спину", "Пиротехника — 1 взрыв"],
+        finisher: ["Пиротехника — 1 в стане"],
+        slow: ["Дробовик — 2 в корпус"]
+    },
+    "Кровосос": {
+        direct: ["Холодное — 4 в корпус", "Гаусс — 3 в корпус", "Удар экзы — 2 в корпус"],
+        stun: ["Пиротехника — 1 взрыв"],
+        finisher: ["Пиротехника — 1 в стане"],
+        slow: ["Дробовик — 2 в корпус"],
+        ignore: ["Огнестрел"]
+    },
+    "Химера": {
+        direct: ["Холодное — 5 в корпус", "Гаусс — 4 в корпус", "Удар экзы — 4 в корпус"],
+        stun: ["Пиротехника — 2 взрыва"],
+        finisher: ["Пиротехника — 2 в стане", "Холодное — 5 в корпус в стане"],
+        slow: ["Дробовик — 3 в корпус"],
+        ignore: ["Огнестрел"]
+    }
+};
+
+// ====== ЭКЗАМЕН ======
+let examTotal = 0;
+let examMistakes = 0;
+const MAX_Q = 10;
+const MAX_ERR = 2;
+
+let correctAnswers = [];
+let expectedAnswers = [];
+let questionLocked = false;
+
+const questionEl = document.getElementById("question");
+const answersEl = document.getElementById("answers");
+const resultEl = document.getElementById("result");
+const hintEl = document.getElementById("hint");
+const examStateEl = document.getElementById("examState");
+const qStatEl = document.getElementById("qStat");
+const errStatEl = document.getElementById("errStat");
+const lifeStatEl = document.getElementById("lifeStat");
+
+const checkBtn = document.getElementById("checkBtn");
+const nextBtn = document.getElementById("nextBtn");
+const restartBtn = document.getElementById("restartBtn");
+
+function random(arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function unique(arr) {
+    return [...new Set(arr)];
+}
+
+function shuffle(arr) {
+    return [...arr].sort(() => Math.random() - 0.5);
+}
+
+function randomInt(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function parseAnswerPart(value) {
+    const text = (value || "").trim();
+    const match = text.match(/^(.*?)\s*—\s*(.*)$/);
+    if (!match) {
+        return { raw: text.toLowerCase() };
+    }
+
+    const weapon = match[1].trim().toLowerCase();
+    const detailOriginal = match[2].trim().toLowerCase();
+    let zone = null;
+
+    if (/\bв спину\b/.test(detailOriginal)) {
+        zone = "back";
+    } else if (/\bв корпус\b/.test(detailOriginal)) {
+        zone = "body";
+    }
+
+    const detailBase = detailOriginal.replace(/\bв (спину|корпус)\b/g, "").replace(/\s+/g, " ").trim();
+    return {
+        weapon,
+        detailOriginal,
+        detailBase,
+        zone
+    };
+}
+
+function partMatches(expectedPart, selectedPart) {
+    const expected = parseAnswerPart(expectedPart);
+    const selected = parseAnswerPart(selectedPart);
+
+    if (expected.raw || selected.raw) {
+        return (expected.raw || "") === (selected.raw || "");
+    }
+    if (expected.weapon !== selected.weapon) {
+        return false;
+    }
+    if (expected.detailBase !== selected.detailBase) {
+        return false;
+    }
+
+    // "Спина" - частный случай "корпуса":
+    // ожидаем "корпус" => подходит "корпус" или "спина";
+    // ожидаем "спина" => подходит только "спина".
+    if (expected.zone === "body") {
+        return selected.zone === "body" || selected.zone === "back";
+    }
+    if (expected.zone === "back") {
+        return selected.zone === "back";
+    }
+    return expected.detailOriginal === selected.detailOriginal;
+}
+
+function answerMatches(expectedAnswer, selectedAnswer) {
+    const expectedParts = expectedAnswer.split("→").map((p) => p.trim());
+    const selectedParts = selectedAnswer.split("→").map((p) => p.trim());
+
+    if (expectedParts.length !== selectedParts.length) {
+        return false;
+    }
+    for (let i = 0; i < expectedParts.length; i++) {
+        if (!partMatches(expectedParts[i], selectedParts[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function removeBaseIfStanceVariantExists(answers) {
+    const stanceBases = new Set(
+        answers
+            .filter((a) => /\bв стане\b/i.test(a))
+            .map((a) => a.replace(/\s*в стане\b/gi, "").replace(/\s+/g, " ").trim().toLowerCase())
+    );
+
+    return answers.filter((a) => {
+        const base = a.replace(/\s*в стане\b/gi, "").replace(/\s+/g, " ").trim().toLowerCase();
+        const isStance = /\bв стане\b/i.test(a);
+        if (isStance) {
+            return true;
+        }
+        return !stanceBases.has(base);
+    });
+}
+
+function buildAnswerMapping(expectedList, selectedList) {
+    const used = new Set();
+    const mapping = new Map();
+
+    function dfs(expectedIdx) {
+        if (expectedIdx >= expectedList.length) {
+            return true;
+        }
+        for (let selectedIdx = 0; selectedIdx < selectedList.length; selectedIdx++) {
+            if (used.has(selectedIdx)) {
+                continue;
+            }
+            if (!answerMatches(expectedList[expectedIdx], selectedList[selectedIdx])) {
+                continue;
+            }
+            used.add(selectedIdx);
+            mapping.set(selectedIdx, expectedIdx);
+            if (dfs(expectedIdx + 1)) {
+                return true;
+            }
+            used.delete(selectedIdx);
+            mapping.delete(selectedIdx);
+        }
+        return false;
+    }
+
+    if (expectedList.length !== selectedList.length) {
+        return null;
+    }
+    return dfs(0) ? mapping : null;
+}
+
+function updateStats() {
+    qStatEl.innerText = `${examTotal} / ${MAX_Q}`;
+    errStatEl.innerText = `${examMistakes} / ${MAX_ERR}`;
+    lifeStatEl.innerText = `${Math.max(0, MAX_ERR - examMistakes)}`;
+}
+
+function setButtonsState({ canCheck, canNext }) {
+    checkBtn.disabled = !canCheck;
+    nextBtn.disabled = !canNext;
+}
+
+function getSelectedTexts() {
+    return [...document.querySelectorAll(".answer-btn.selected")].map((b) => b.innerText);
+}
+
+function generateQuestion() {
+    const monsters = Object.keys(db);
+    const monster = random(monsters);
+    const m = db[monster];
+
+    const types = ["kill", "stun", "slow", "finisher"];
+    const type = random(types);
+
+    let question = "";
+    let options = [];
+
+    if (type === "kill") {
+        question = `Как убить ${monster}?`;
+        correctAnswers = [...m.direct];
+        const inStunKill = unique([...(m.finisher || []), ...m.direct]);
+        m.stun.forEach((stun) => {
+            inStunKill.forEach((fin) => {
+                correctAnswers.push(`${stun} → ${fin}`);
+            });
+        });
+        correctAnswers = unique(correctAnswers);
+    }
+
+    if (type === "stun") {
+        question = `Как застанить ${monster}?`;
+        correctAnswers = m.stun.length ? m.stun : ["не станится"];
+    }
+
+    if (type === "slow") {
+        question = `Как замедлить ${monster}?`;
+        correctAnswers = m.slow.length ? m.slow : ["не замедляется"];
+    }
+
+    if (type === "finisher") {
+        question = `Как добить ${monster} в стане?`;
+        correctAnswers = removeBaseIfStanceVariantExists(unique([...(m.finisher || []), ...m.direct]));
+    }
+
+    const backAllowedMonsters = ["Псевдособака", "Снорк", "Бюрер", "Излом"];
+    const allowBackShots = backAllowedMonsters.includes(monster);
+
+    let wrongPool = [
+        "Холодное — 1 в корпус",
+        "Огнестрел — 1 в корпус",
+        "Гаусс — 2 в корпус",
+        "Дробовик — 1 в корпус",
+        "Пиротехника — 2 взрыва",
+        "Удар экзы — 1 в спину",
+        "игнорирует",
+        "не работает"
+    ];
+
+    if (!allowBackShots) {
+        wrongPool = wrongPool.filter((item) => !item.includes("в спину"));
+        correctAnswers = correctAnswers.filter((item) => !item.includes("в спину"));
+    }
+
+    // Гарантируем, что все правильные варианты всегда есть в кнопках.
+    const maxOptions = 6;
+    const uniqueCorrect = unique(correctAnswers);
+
+    // В многоответных вопросах показываем не все возможные верные варианты.
+    let shownCorrectCount = uniqueCorrect.length;
+    if (uniqueCorrect.length > 2) {
+        shownCorrectCount = randomInt(2, Math.min(3, uniqueCorrect.length));
+    }
+    expectedAnswers = shuffle(uniqueCorrect).slice(0, shownCorrectCount);
+
+    const fullCorrect = uniqueCorrect;
+    const safeWrongPool = wrongPool.filter((candidate) =>
+        !fullCorrect.some((correct) =>
+            answerMatches(correct, candidate) || answerMatches(candidate, correct)
+        )
+    );
+    const shuffledWrong = shuffle(safeWrongPool.filter((w) => !expectedAnswers.includes(w)));
+    const fillCount = Math.max(0, maxOptions - expectedAnswers.length);
+    options = shuffle([...expectedAnswers, ...shuffledWrong.slice(0, fillCount)]);
+    render(question, options);
+}
+
+function render(question, options) {
+    questionLocked = false;
+    questionEl.innerText = question;
+    answersEl.innerHTML = "";
+    resultEl.innerText = "";
+    resultEl.className = "result";
+    hintEl.innerText = "Можно выбрать несколько вариантов.";
+    examStateEl.innerText = "";
+    setButtonsState({ canCheck: true, canNext: false });
+
+    options.forEach((opt) => {
+        const btn = document.createElement("button");
+        btn.innerText = opt;
+        btn.className = "answer-btn";
+        btn.onclick = () => {
+            if (questionLocked) {
+                return;
+            }
+            btn.classList.toggle("selected");
+        };
+        answersEl.appendChild(btn);
+    });
+}
+
+function markAnswers(selected, mapping) {
+    const answerButtons = [...document.querySelectorAll(".answer-btn")];
+    const matchedExpected = new Set(mapping ? [...mapping.values()] : []);
+    const selectedByText = new Set(selected);
+
+    answerButtons.forEach((btn) => {
+        const text = btn.innerText;
+        const isSelected = btn.classList.contains("selected");
+        const isMatchedSelection = isSelected && selected.some((answer) => answer === text) && mapping
+            ? [...mapping.keys()].some((idx) => selected[idx] === text)
+            : false;
+        const expectedIndex = expectedAnswers.findIndex((answer) => answer === text);
+        const isMissedExpected = !isSelected && expectedIndex !== -1 && !matchedExpected.has(expectedIndex);
+
+        btn.disabled = true;
+        if (isMatchedSelection) {
+            btn.classList.add("answer-correct");
+        } else if (isMissedExpected) {
+            btn.classList.add("answer-missed");
+        } else if (isSelected) {
+            btn.classList.add("answer-wrong");
+        }
+    });
+}
+
+function finishExam(message) {
+    setButtonsState({ canCheck: false, canNext: false });
+    examStateEl.innerText = message;
+    hintEl.innerText = "Нажми «Начать заново», чтобы пройти еще раз.";
+}
+
+function check() {
+    if (questionLocked) {
+        return;
+    }
+
+    questionLocked = true;
+    const selected = getSelectedTexts();
+    const mapping = buildAnswerMapping(expectedAnswers, selected);
+    const ok = !!mapping;
+
+    examTotal++;
+    if (ok) {
+        resultEl.innerText = "✅ Верно";
+        resultEl.classList.add("ok");
+    } else {
+        examMistakes++;
+        resultEl.innerText = `❌ Ошибка (${examMistakes}/${MAX_ERR})`;
+        resultEl.classList.add("bad");
+    }
+
+    markAnswers(selected, mapping);
+    updateStats();
+    hintEl.innerText = `Правильные ответы в этом вопросе: ${expectedAnswers.join(" | ")}`;
+
+    if (examMistakes >= MAX_ERR) {
+        finishExam("Экзамен провален.");
+        return;
+    }
+    if (examTotal >= MAX_Q) {
+        finishExam("Экзамен сдан!");
+        return;
+    }
+
+    setButtonsState({ canCheck: false, canNext: true });
+    examStateEl.innerText = "Ответ принят. Переходи к следующему вопросу.";
+}
+
+function restart() {
+    examTotal = 0;
+    examMistakes = 0;
+    updateStats();
+    generateQuestion();
+}
+
+checkBtn.addEventListener("click", check);
+nextBtn.addEventListener("click", generateQuestion);
+restartBtn.addEventListener("click", restart);
+
+updateStats();
+generateQuestion();
+</script>
+</body>
+</html>
