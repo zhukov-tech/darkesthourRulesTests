@@ -47,6 +47,27 @@ h1 {
     margin-bottom: 16px;
 }
 
+.mode-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.mode-row label {
+    color: #bdbdbd;
+    font-size: 14px;
+}
+
+.mode-select {
+    background: #2a2a2a;
+    border: 1px solid #3a3a3a;
+    color: #f0f0f0;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 14px;
+}
+
 .stat {
     background: #2a2a2a;
     border-radius: 10px;
@@ -193,17 +214,25 @@ h1 {
         <h1>STALKER: Тест-тренажер</h1>
         <p class="subtitle">Отметь все правильные варианты и нажми "Проверить ответ".</p>
 
+        <div class="mode-row">
+            <label for="modeSelect">Режим:</label>
+            <select class="mode-select" id="modeSelect">
+                <option value="exam">Экзамен</option>
+                <option value="endless">Бесконечный</option>
+            </select>
+        </div>
+
         <div class="stats">
             <div class="stat">
-                <span class="stat-title">Вопрос</span>
+                <span class="stat-title" id="qStatTitle">Вопрос</span>
                 <span class="stat-value" id="qStat">0 / 10</span>
             </div>
             <div class="stat">
-                <span class="stat-title">Ошибки</span>
+                <span class="stat-title" id="errStatTitle">Ошибки</span>
                 <span class="stat-value" id="errStat">0 / 2</span>
             </div>
             <div class="stat">
-                <span class="stat-title">Осталось жизней</span>
+                <span class="stat-title" id="lifeStatTitle">Осталось жизней</span>
                 <span class="stat-value" id="lifeStat">2</span>
             </div>
         </div>
@@ -284,6 +313,10 @@ let examTotal = 0;
 let examMistakes = 0;
 const MAX_Q = 10;
 const MAX_ERR = 2;
+let mode = "exam";
+let endlessTotal = 0;
+let endlessCorrect = 0;
+let endlessWrong = 0;
 
 let correctAnswers = [];
 let expectedAnswers = [];
@@ -294,6 +327,9 @@ const answersEl = document.getElementById("answers");
 const resultEl = document.getElementById("result");
 const hintEl = document.getElementById("hint");
 const examStateEl = document.getElementById("examState");
+const qStatTitleEl = document.getElementById("qStatTitle");
+const errStatTitleEl = document.getElementById("errStatTitle");
+const lifeStatTitleEl = document.getElementById("lifeStatTitle");
 const qStatEl = document.getElementById("qStat");
 const errStatEl = document.getElementById("errStat");
 const lifeStatEl = document.getElementById("lifeStat");
@@ -301,6 +337,7 @@ const lifeStatEl = document.getElementById("lifeStat");
 const checkBtn = document.getElementById("checkBtn");
 const nextBtn = document.getElementById("nextBtn");
 const restartBtn = document.getElementById("restartBtn");
+const modeSelectEl = document.getElementById("modeSelect");
 
 function random(arr) {
     return arr[Math.floor(Math.random() * arr.length)];
@@ -435,9 +472,22 @@ function buildAnswerMapping(expectedList, selectedList) {
 }
 
 function updateStats() {
-    qStatEl.innerText = `${examTotal} / ${MAX_Q}`;
-    errStatEl.innerText = `${examMistakes} / ${MAX_ERR}`;
-    lifeStatEl.innerText = `${Math.max(0, MAX_ERR - examMistakes)}`;
+    if (mode === "exam") {
+        qStatTitleEl.innerText = "Вопрос";
+        errStatTitleEl.innerText = "Ошибки";
+        lifeStatTitleEl.innerText = "Осталось жизней";
+        qStatEl.innerText = `${examTotal} / ${MAX_Q}`;
+        errStatEl.innerText = `${examMistakes} / ${MAX_ERR}`;
+        lifeStatEl.innerText = `${Math.max(0, MAX_ERR - examMistakes)}`;
+        return;
+    }
+
+    qStatTitleEl.innerText = "Всего вопросов";
+    errStatTitleEl.innerText = "Верных";
+    lifeStatTitleEl.innerText = "Неверных";
+    qStatEl.innerText = `${endlessTotal}`;
+    errStatEl.innerText = `${endlessCorrect}`;
+    lifeStatEl.innerText = `${endlessWrong}`;
 }
 
 function setButtonsState({ canCheck, canNext }) {
@@ -581,7 +631,13 @@ function markAnswers(selected, mapping) {
 function finishExam(message) {
     setButtonsState({ canCheck: false, canNext: false });
     examStateEl.innerText = message;
-    hintEl.innerText = "Нажми «Начать заново», чтобы пройти еще раз.";
+    // Не перезаписываем блок с правильными ответами последнего вопроса.
+    // Это помогает разбирать ошибку даже при мгновенном провале экзамена.
+    if (!hintEl.innerText.trim()) {
+        hintEl.innerText = "Нажми «Начать заново», чтобы пройти еще раз.";
+    } else {
+        hintEl.innerText += "  Нажми «Начать заново», чтобы пройти еще раз.";
+    }
 }
 
 function check() {
@@ -594,26 +650,44 @@ function check() {
     const mapping = buildAnswerMapping(expectedAnswers, selected);
     const ok = !!mapping;
 
-    examTotal++;
     if (ok) {
         resultEl.innerText = "✅ Верно";
         resultEl.classList.add("ok");
+        if (mode === "exam") {
+            examTotal++;
+        } else {
+            endlessTotal++;
+            endlessCorrect++;
+        }
     } else {
-        examMistakes++;
-        resultEl.innerText = `❌ Ошибка (${examMistakes}/${MAX_ERR})`;
         resultEl.classList.add("bad");
+        if (mode === "exam") {
+            examTotal++;
+            examMistakes++;
+            resultEl.innerText = `❌ Ошибка (${examMistakes}/${MAX_ERR})`;
+        } else {
+            endlessTotal++;
+            endlessWrong++;
+            resultEl.innerText = "❌ Неверно";
+        }
     }
 
     markAnswers(selected, mapping);
     updateStats();
     hintEl.innerText = `Правильные ответы в этом вопросе: ${expectedAnswers.join(" | ")}`;
 
-    if (examMistakes >= MAX_ERR) {
-        finishExam("Экзамен провален.");
-        return;
-    }
-    if (examTotal >= MAX_Q) {
-        finishExam("Экзамен сдан!");
+    if (mode === "exam") {
+        if (examMistakes >= MAX_ERR) {
+            finishExam("Экзамен провален.");
+            return;
+        }
+        if (examTotal >= MAX_Q) {
+            finishExam("Экзамен сдан!");
+            return;
+        }
+    } else {
+        setButtonsState({ canCheck: false, canNext: true });
+        examStateEl.innerText = "Ответ принят. Бесконечный режим активен.";
         return;
     }
 
@@ -622,18 +696,37 @@ function check() {
 }
 
 function restart() {
-    examTotal = 0;
-    examMistakes = 0;
+    if (mode === "exam") {
+        examTotal = 0;
+        examMistakes = 0;
+    } else {
+        endlessTotal = 0;
+        endlessCorrect = 0;
+        endlessWrong = 0;
+    }
     updateStats();
     generateQuestion();
+}
+
+function setMode(nextMode) {
+    mode = nextMode;
+    examStateEl.innerText = mode === "exam"
+        ? "Режим экзамена: 10 вопросов, максимум 2 ошибки."
+        : "Бесконечный режим: тренируйся без ограничений.";
+    resultEl.innerText = "";
+    hintEl.innerText = "Можно выбрать несколько вариантов.";
+    restart();
 }
 
 checkBtn.addEventListener("click", check);
 nextBtn.addEventListener("click", generateQuestion);
 restartBtn.addEventListener("click", restart);
+modeSelectEl.addEventListener("change", (e) => {
+    setMode(e.target.value);
+});
 
 updateStats();
-generateQuestion();
+setMode(mode);
 </script>
 </body>
 </html>
